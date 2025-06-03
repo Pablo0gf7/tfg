@@ -1,14 +1,19 @@
+#include "../headers/utils.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "../headers/lsb3.h"
+
+
+const char *build_path_static( const char *filename) {
+    static char path[512];  
+    snprintf(path, sizeof(path), "%s/%s", "./out", filename);
+    return path;  
+}
 
 void printUsage()
 {
     printf("Usage:\n");
     printf("  Interactive mode: ./executable -i\n");
-    printf("  To embed a message: ./executable embed <image_path> <message> <output_path> <key>\n");
-    printf("  To extract a message: ./executable extract <image_path> <key>\n");
+    printf("  To embed a message: ./executable -c <image_path> <message> <output_path> <key>\n");
+    printf("  To extract a message: ./executable -e <image_path> <key>\n");
 }
 
 void interactiveMode()
@@ -70,52 +75,3 @@ void interactiveMode()
     }
 }
 
-int main(int argc, char *argv[])
-{
-    if (argc < 2)
-    {
-        printUsage();
-        return 1;
-    }
-
-    if (strcmp(argv[1], "-i") == 0)
-    {
-        interactiveMode();
-    }
-    else if (strcmp(argv[1], "embed") == 0)
-    {
-        if (argc != 6)
-        {
-            printUsage();
-            return 1;
-        }
-        const char *imagePath = argv[2];
-        const char *message = argv[3];
-        const char *outputPath = argv[4];
-        const char *key = argv[5];
-        embedMessage(imagePath, message, outputPath, key);
-    }
-    else if (strcmp(argv[1], "extract") == 0)
-    {
-        if (argc != 4)
-        {
-            printUsage();
-            return 1;
-        }
-        const char *imagePath = argv[2];
-        const char *key = argv[3];
-        char *decryptedMessage = extractMessage(imagePath, key);
-        if (decryptedMessage)
-        {
-            printf("Extracted message: %s\n", decryptedMessage);
-            free(decryptedMessage);
-        }
-    }
-    else
-    {
-        printUsage();
-        return 1;
-    }
-
-    return 0;
-}

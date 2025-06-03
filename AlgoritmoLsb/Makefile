@@ -16,6 +16,6 @@ utils.o: ./src/utils.c
 
 # Limpieza de archivos en Windows
 clean:
-	rm *.o 2>nul || exit 0
-	rm algoritmo.exe 2>nul || exit 0
-	rm ./out/*.* 2>nul || exit 0
+	rm *.o  || exit 0
+	rm algoritmo.exe  || exit 0
+	rm ./out/*.*  || exit 0
