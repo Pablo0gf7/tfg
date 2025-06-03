@@ -16,5 +16,5 @@ utils.o: utils.c
 
 # Limpieza de archivos en Windows
 clean:
-	del /Q *.o 2>nul || exit 0
-	del /Q steganogram.txt 2>nul || exit 0
+	del /Q *.o  || exit 0
+	del /Q steganogram.txt  || exit 0
