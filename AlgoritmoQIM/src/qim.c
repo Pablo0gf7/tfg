@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "../headers/qim.h"      // Header propio con prototipos
 #include <stdio.h>               // Entrada/salida estándar
 #include <stdlib.h>              // Funciones de utilidad (malloc, free, etc.)
@@ -5,10 +6,11 @@
 #include <sndfile.h>             // Librería para leer/escribir audio
 #include <fftw3.h>               // Librería para DCT/FFT
 #include <math.h>    
-#include <utils.h>            // Funciones matemáticas (round, etc.)
+#include <utils.h>   
+         // Funciones matemáticas (round, etc.)
 
 #define BLOCK_SIZE 1024          // Tamaño de bloque para procesar el audio
-#define DELTA 10.0               // Parámetro de cuantización QIM
+#define DELTA 0.2              // Parámetro de cuantización QIM
 
 // Función auxiliar: inserta un bit en un coeficiente usando QIM
 static double qim_embed(double coef, int bit, double delta) {
@@ -40,7 +42,10 @@ void embed_message(const char *infile, const char *outfile, const char *message)
         return;
     }
 
-    int msg_len = (int)strlen(message) * 8;   // Longitud del mensaje en bits
+char *msg_with_end = NULL;
+asprintf(&msg_with_end, "%s###", message); // Añade marcador de fin
+int msg_len = (int)strlen(msg_with_end) * 8;
+
     int msg_pos = 0;                          // Posición actual en el mensaje (en bits)
 
     // Reserva memoria para el mensaje en bits
@@ -53,11 +58,11 @@ void embed_message(const char *infile, const char *outfile, const char *message)
     }
 
     // Convierte el mensaje de texto a bits (MSB primero)
-    for (size_t i = 0; i < strlen(message); ++i) {
-        for (int b = 7; b >= 0; --b) {
-            bits[msg_pos++] = (message[i] >> b) & 1;
-        }
+    for (size_t i = 0; i < strlen(msg_with_end); ++i) {
+    for (int b = 7; b >= 0; --b) {
+        bits[msg_pos++] = (msg_with_end[i] >> b) & 1;
     }
+}
     msg_pos = 0; // Reinicia posición para el proceso de embedding
 
     float buffer[BLOCK_SIZE];     // Buffer para leer audio en float
@@ -109,13 +114,14 @@ void embed_message(const char *infile, const char *outfile, const char *message)
         fftw_destroy_plan(plan);
         fftw_destroy_plan(iplan);
     }
+free(msg_with_end);
 
     free(bits);         // Libera memoria del mensaje en bits
     sf_close(in);       // Cierra archivo de entrada
     sf_close(out);      // Cierra archivo de salida
     printf("Message embedded!\n"); // Mensaje de éxito
 
-     calculate_mse_psnr(infile, outfile, "./out/resultados.txt");
+     calculate_mse_psnr(infile, outfile, "./out/resultados.txt",msg_len);
 }
 
 // Función principal para extraer un mensaje oculto de un archivo de audio
@@ -166,15 +172,32 @@ void extract_message(const char *infile, int msg_bytes) {
         fftw_destroy_plan(plan); // Libera el plan de FFTW
     }
 
-    // Reconstruye el mensaje a partir de los bits extraídos
-    printf("Extracted message: ");
-    for (int i = 0; i < msg_bytes; ++i) {
-        char c = 0;
-        for (int b = 0; b < 8; ++b)
-            c = (c << 1) | bits[i * 8 + b]; // Reconstruye cada carácter
+    // Reconstruye el mensaje hasta encontrar "###"
+printf("Extracted message: ");
+char c = 0;
+int bit_count = 0;
+char end_check[4] = {0};
+
+for (int i = 0; i < msg_pos; ++i) {
+    c = (c << 1) | bits[i];
+    bit_count++;
+
+    if (bit_count == 8) {
+        bit_count = 0;
         printf("%c", c);
+
+        // Desplaza ventana de 3 últimos caracteres
+        end_check[0] = end_check[1];
+        end_check[1] = end_check[2];
+        end_check[2] = c;
+        end_check[3] = '\0';
+
+        if (strcmp(end_check, "###") == 0) break;
+        c = 0;
     }
-    printf("\n");
+}
+printf("\n");
+
 
     free(bits);     // Libera memoria de los bits
     sf_close(in);   // Cierra archivo de entrada
