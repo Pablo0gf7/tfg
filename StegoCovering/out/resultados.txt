@@ -1,0 +1,2 @@
+MSE (modified part): 0.00000249
+PSNR (modified part): 56.04 dB
