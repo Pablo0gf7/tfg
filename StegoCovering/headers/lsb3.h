@@ -36,5 +36,7 @@ void calculate_and_save_mse_psnr(const unsigned char *img1, const unsigned char 
                                  int width, int height, int channels,
                                  const char *output_file);
 
+                                 void calculate_and_save_mse_psnr_modified_only(const unsigned char *img1, const unsigned char *img2,
+                                               int width, int height, int channels);
 
 #endif // LSB3_H
