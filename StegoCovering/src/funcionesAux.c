@@ -6,7 +6,7 @@
 #include <ctype.h>
 
 // Contante que muestra las letras que formaran parte de nuestra base, quito la Ñ para trabajar de forma mas universal y unificada.
-const char base16_letras[] = "EAOSRNIDLCTUMPBG";
+const char base16_letras[] = "EAOSRNIDLCTUMPHY";
 /*
  * Función: caracter_a_base16
  * Descripción: Funcion auxiliar privada para calcular el valor correspondiente en nuestra base convirtiendo un numero de 4 bits en dicha representacion
