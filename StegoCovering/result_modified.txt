@@ -1,6 +1,6 @@
-MSE (R): 1.000000 (en 140 píxeles modificados)
-MSE (G): 1.000000 (en 146 píxeles modificados)
-MSE (B): 1.000000 (en 161 píxeles modificados)
+MSE (R): 1.000000 (en 105 píxeles modificados)
+MSE (G): 1.000000 (en 110 píxeles modificados)
+MSE (B): 1.000000 (en 118 píxeles modificados)
 MSE (Average): 1.000000
 
 PSNR (R): 48.130804 dB

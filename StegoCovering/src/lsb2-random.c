@@ -4,7 +4,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../include/stb_image_write.h"
 
-#include "../headers/lsb3.h"
+#include "../headers/lsb2-random.h"
 #include "../headers/utils.h"
 
 #include <stdio.h>
@@ -14,19 +14,13 @@
 
 #include <stdint.h>
 
-void embedMessage(const char *imagePath, const char *message, const char *outputPath, const char *key)
-{
-    if (sodium_init() < 0) {
-        fprintf(stderr, "libsodium init failed.\n");
-        return;
-    }
+
+void embedMessage(const char *imagePath, const char *message, const char *outputPath, const char *key) {
+    if (sodium_init() < 0) return;
 
     int width, height, channels;
     unsigned char *img = stbi_load(imagePath, &width, &height, &channels, 0);
-    if (!img || channels < 3) {
-        fprintf(stderr, "Error loading image: %s\n", imagePath);
-        return;
-    }
+    if (!img || channels < 3) return;
 
     unsigned char *img_original = malloc(width * height * channels);
     memcpy(img_original, img, width * height * channels);
@@ -55,19 +49,17 @@ void embedMessage(const char *imagePath, const char *message, const char *output
     memcpy(ptr, &msg_len_le, 4); ptr += 4;
     memcpy(ptr, &cipher_len_le, 4); ptr += 4;
     memcpy(ptr, cipher, cipherLen); ptr += cipherLen;
-    memcpy(ptr, "###", 3); 
+    memcpy(ptr, "###", 3);
 
     size_t bitsNeeded = totalLen * 8;
     size_t totalPositions = width * height * 3;
-
     if (bitsNeeded > totalPositions) {
-        fprintf(stderr, "Encrypted data too large for image.\n");
-        free(cipher); free(finalData); stbi_image_free(img);
+        fprintf(stderr, "Message too large.\n");
+        free(cipher); free(finalData); stbi_image_free(img); free(img_original);
         return;
     }
 
-    // Generar posiciones aleatorias
-    size_t *positions = malloc(sizeof(size_t) * totalPositions);
+    size_t *positions = malloc(totalPositions * sizeof(size_t));
     for (size_t i = 0; i < totalPositions; i++) positions[i] = i;
 
     unsigned char seed_hash[crypto_generichash_BYTES];
@@ -76,61 +68,36 @@ void embedMessage(const char *imagePath, const char *message, const char *output
 
     for (size_t i = totalPositions - 1; i > 0; i--) {
         size_t j = rand() % (i + 1);
-        size_t tmp = positions[i];
-        positions[i] = positions[j];
-        positions[j] = tmp;
+        size_t tmp = positions[i]; positions[i] = positions[j]; positions[j] = tmp;
     }
 
-    // Insertar bits en orden aleatorio
-    size_t bitIndex = 0;
-    for (size_t i = 0; i < totalLen; ++i) {
-        for (int bit = 7; bit >= 0; --bit) {
-            unsigned char bitValue = (finalData[i] >> bit) & 1;
-            size_t pos = positions[bitIndex];
-            size_t pixel = pos / 3;
-            size_t color = pos % 3;
-            img[pixel * channels + color] = (img[pixel * channels + color] & ~1) | bitValue;
-            bitIndex++;
-        }
+    for (size_t bitIndex = 0; bitIndex < bitsNeeded; bitIndex++) {
+        size_t bytePos = bitIndex / 8;
+        int bit = 7 - (bitIndex % 8);
+        unsigned char bitVal = (finalData[bytePos] >> bit) & 1;
+        size_t pos = positions[bitIndex];
+        size_t pixel = pos / 3;
+        size_t color = pos % 3;
+        img[pixel * channels + color] = (img[pixel * channels + color] & ~1) | bitVal;
     }
 
-    if (!stbi_write_png(build_path_static(outputPath), width, height, channels, img, width * channels)) {
-        fprintf(stderr, "Error saving image to %s\n", outputPath);
-    }
+    stbi_write_png(build_path_static(outputPath), width, height, channels, img, width * channels);
 
-    calculate_and_save_mse_psnr(img_original, img, width, height, channels, build_path_static("results.txt"));
+    calculate_and_save_mse_psnr(img_original, img, width, height, channels, "results.txt");
     calculate_and_save_mse_psnr_modified_only(img_original, img, width, height, 3);
 
-
-    free(cipher);
-    free(finalData);
-    free(positions);
-    stbi_image_free(img);
+    free(cipher); free(finalData); free(positions); stbi_image_free(img); free(img_original);
 }
 
-
-
-
-char *extractMessage(const char *imagePath, const char *key)
-{
-    if (sodium_init() < 0) {
-        fprintf(stderr, "libsodium init failed.\n");
-        return NULL;
-    }
+char *extractMessage(const char *imagePath, const char *key) {
+    if (sodium_init() < 0) return NULL;
 
     int width, height, channels;
     unsigned char *img = stbi_load(imagePath, &width, &height, &channels, 0);
-    if (!img || channels < 3) {
-        fprintf(stderr, "Error loading image: %s\n", imagePath);
-        return NULL;
-    }
+    if (!img || channels < 3) return NULL;
 
     size_t totalPositions = width * height * 3;
-    size_t maxBytes = totalPositions / 8;
-    unsigned char *data = malloc(maxBytes);
-
-    // Generar mismas posiciones aleatorias
-    size_t *positions = malloc(sizeof(size_t) * totalPositions);
+    size_t *positions = malloc(totalPositions * sizeof(size_t));
     for (size_t i = 0; i < totalPositions; i++) positions[i] = i;
 
     unsigned char seed_hash[crypto_generichash_BYTES];
@@ -139,32 +106,28 @@ char *extractMessage(const char *imagePath, const char *key)
 
     for (size_t i = totalPositions - 1; i > 0; i--) {
         size_t j = rand() % (i + 1);
-        size_t tmp = positions[i];
-        positions[i] = positions[j];
-        positions[j] = tmp;
+        size_t tmp = positions[i]; positions[i] = positions[j]; positions[j] = tmp;
     }
 
-    // Extraer bits en orden aleatorio
-    size_t bitIndex = 0;
-    for (size_t i = 0; i < maxBytes; ++i) {
-        unsigned char byte = 0;
-        for (int bit = 7; bit >= 0; --bit) {
-            size_t pos = positions[bitIndex];
-            size_t pixel = pos / 3;
-            size_t color = pos % 3;
-            byte |= ((img[pixel * channels + color] & 1) << bit);
-            bitIndex++;
-        }
-        data[i] = byte;
+    size_t maxHeaderBits = (3 + crypto_secretbox_NONCEBYTES + 4 + 4) * 8;
+    unsigned char headerBuf[64] = {0};
+
+    for (size_t bitIndex = 0; bitIndex < maxHeaderBits; ++bitIndex) {
+        size_t bytePos = bitIndex / 8;
+        int bit = 7 - (bitIndex % 8);
+        size_t pos = positions[bitIndex];
+        size_t pixel = pos / 3;
+        size_t color = pos % 3;
+        headerBuf[bytePos] |= ((img[pixel * channels + color] & 1) << bit);
     }
 
-    if (memcmp(data, "###", 3) != 0) {
-        fprintf(stderr, "No se encontró el marcador inicial.\n");
-        free(data); free(positions); stbi_image_free(img);
+    if (memcmp(headerBuf, "###", 3) != 0) {
+        fprintf(stderr, "No initial marker found.\n");
+        free(positions); stbi_image_free(img);
         return NULL;
     }
 
-    unsigned char *ptr = data + 3;
+    unsigned char *ptr = headerBuf + 3;
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
     memcpy(nonce, ptr, crypto_secretbox_NONCEBYTES); ptr += crypto_secretbox_NONCEBYTES;
 
@@ -172,39 +135,42 @@ char *extractMessage(const char *imagePath, const char *key)
     memcpy(&msg_len, ptr, 4); ptr += 4;
     memcpy(&cipher_len, ptr, 4); ptr += 4;
 
-    if (cipher_len > maxBytes - (ptr - data) - 3) {
-        fprintf(stderr, "Cipher length is too large or corrupted.\n");
-        free(data); free(positions); stbi_image_free(img);
+    size_t totalLen = 3 + crypto_secretbox_NONCEBYTES + 4 + 4 + cipher_len + 3;
+    size_t bitsToExtract = totalLen * 8;
+    unsigned char *data = calloc(totalLen, 1);
+
+    for (size_t bitIndex = 0; bitIndex < bitsToExtract; ++bitIndex) {
+        size_t bytePos = bitIndex / 8;
+        int bit = 7 - (bitIndex % 8);
+        size_t pos = positions[bitIndex];
+        size_t pixel = pos / 3;
+        size_t color = pos % 3;
+        data[bytePos] |= ((img[pixel * channels + color] & 1) << bit);
+    }
+
+    if (memcmp(data + totalLen - 3, "###", 3) != 0) {
+        fprintf(stderr, "No final marker found.\n");
+        free(positions); stbi_image_free(img); free(data);
         return NULL;
     }
 
-    unsigned char *cipher = malloc(cipher_len);
-    memcpy(cipher, ptr, cipher_len); ptr += cipher_len;
-
-    if (memcmp(ptr, "###", 3) != 0) {
-        fprintf(stderr, "No se encontró el marcador final.\n");
-        free(data); free(cipher); free(positions); stbi_image_free(img);
-        return NULL;
-    }
-
+    unsigned char *cipher = data + 3 + crypto_secretbox_NONCEBYTES + 4 + 4;
     unsigned char key_bin[crypto_secretbox_KEYBYTES];
     crypto_generichash(key_bin, sizeof key_bin, (const unsigned char *)key, strlen(key), NULL, 0);
 
-    unsigned char *decrypted = malloc(cipher_len + 1);
+    unsigned char *decrypted = malloc(msg_len + 1);
     if (crypto_secretbox_open_easy(decrypted, cipher, cipher_len, nonce, key_bin) != 0) {
         fprintf(stderr, "Decryption failed.\n");
-        free(decrypted); free(data); free(cipher); free(positions); stbi_image_free(img);
+        free(decrypted); free(data); free(positions); stbi_image_free(img);
         return NULL;
     }
 
     decrypted[msg_len] = '\0';
 
-    free(data);
-    free(cipher);
-    free(positions);
-    stbi_image_free(img);
+    free(data); free(positions); stbi_image_free(img);
     return (char *)decrypted;
 }
+
 
 
 

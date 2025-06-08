@@ -8,7 +8,7 @@
 #include "../headers/funcionesAux.h"
 
 // Imagen
-#include "../headers/lsb3.h"
+#include "../headers/lsb2-random.h"
 
 // Audio
 #include "../headers/qim.h"
