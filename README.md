@@ -1,35 +1,35 @@
-# TFG
+# stego-metasploit
 
-Ejemplos para ejecutar
+Plugin de Metasploit (`stego.rb`) para invocar **algoritmos esteganográficos en C** (imagen, audio, texto) desde `msfconsole`.  
+No se porta la lógica a Ruby: la capa Ruby **orquesta** un binario externo, preservando rendimiento y control.
 
-Compilar el programa
-```gcc src/*.c -Iheaders -lsndfile -lfftw3 -lm -lssl -lcrypto -lsodium -o steganografia   ```
+> **Estado**: estable para uso local/lab. Se aceptan PRs.
 
-## Imagenes
+---
 
-Se guarda directamente en ./out la imagen
-- ```./steganografia.exe -i -c resources/image/acordeon.jpg  "Hola" embed.jpg clave123```
+## ✨ Características
 
+- `load stego.rb` en `msfconsole` y tendrás:
+  - `stego <args...>`: ejecuta el binario configurado con tus argumentos.
+  - `stego_set_bin /ruta/al/binario`
+  - `stego_bin`: muestra y verifica la ruta
+  - `stego_debug on|off|toggle`: trazas de depuración
+- Redacción automática de secretos al imprimir la línea ejecutada (flags `-p`, `-k`, `-m`).
+- Compatible con:
+  - **Binario monolítico** (`dist/steg`): modos `-t` (texto), `-i` (imagen), `-a` (audio).
+  - **Binarios específicos** (`dist/qim_audio`, etc.).
 
-- ```./steganografia.exe -i -e ./out/embed.jpg clave123```
+---
 
-## Texto
+## 📦 Instalación
 
-Falta añadir el cifrado despues de unificar todos y que se guarde la salida en ./out
-- ```./steganografia.exe -t -c ./resources/messages/mensaje2.txt ./resources/texts/texto1000pal.txt```
+### Requisitos
+- Metasploit Framework (msfconsole)
+- (Opcional) Toolchain C y librerías:
+  - `libsndfile`, `fftw3`, `libsodium`, `libm` (audio)
+  - `stb_image.h`, `stb_image_write.h` (imagen)
 
-
-- ```./steganografia.exe -t -e ./out/steganogram.txt```
-
-## Audio
-
-- ``` ./steganografia.exe -a embed ./resources/audio/pista2.wav  ./out/embed.wav "Hola este es el mensaje"```
-
-Que el fichero con el que se guarda sea en ./out
-- ``` ./steganografia.exe -a extract  ./out/embed.wav 40```
-
-
-# Añadir
-- QUe aparte de mostrarse por consola se guarden en un fichero en todos los casos, el cifrado siempre
-
-- Revisar bien el main
+### 1) Clonar
+```bash
+git clone https://github.com/<tu-usuario>/stego-metasploit.git
+cd stego-metasploit

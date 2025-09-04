@@ -1,0 +1,21 @@
+== METRICAS AUDIO ==
+Archivo original : ./audio/test.wav
+Archivo estego   : ./out/audio_out.wav
+Canales: 2   Frames comparados: 2018211
+Frames modificados: 1024   (no modificados: 2017187)
+Payload embebido (cifrado): 68 bytes   Bits totales: 576
+
+==== TODOS LOS FRAMES ====
+Canal 0:  MSE=1.730235354e-09   PSNR=87.62 dB   SNR=75.27 dB
+Canal 1:  MSE=5.933999592e-11   PSNR=102.27 dB   SNR=89.89 dB
+TOTAL:    MSE=8.947876749e-10   PSNR=90.48 dB   SNR=78.12 dB
+
+==== SOLO FRAMES MODIFICADOS ====
+Canal 0:  MSE=3.290238055e-06   PSNR=54.83 dB   SNR=24.32 dB
+Canal 1:  MSE=0   PSNR=inf dB   SNR=inf dB
+TOTAL:    MSE=1.645119028e-06   PSNR=57.84 dB   SNR=26.02 dB
+
+==== FRAMES NO MODIFICADOS ====
+Canal 0:  MSE=6.086508341e-11   PSNR=102.16 dB   SNR=89.81 dB   (frames=2017187)
+Canal 1:  MSE=5.937011914e-11   PSNR=102.26 dB   SNR=89.89 dB   (frames=2017187)
+TOTAL:    MSE=6.011760128e-11   PSNR=102.21 dB   SNR=89.85 dB
