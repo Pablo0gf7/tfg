@@ -28,7 +28,7 @@ module Msf
   class StegoDispatcher
     include Msf::Ui::Console::CommandDispatcher
 
-    DEFAULT_BIN = '/opt/steg/steg'
+    DEFAULT_BIN = '/opt/stego/stego'
 
     def initialize(driver)
       super(driver)

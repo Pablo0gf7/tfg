@@ -17,7 +17,7 @@ No se porta la lógica a Ruby: la capa Ruby **orquesta** un binario externo, pre
 - Redacción automática de secretos al imprimir la línea ejecutada (flags `-p`, `-k`, `-m`).
 - Compatible con:
   - **Binario monolítico** (`dist/steg`): modos `-t` (texto), `-i` (imagen), `-a` (audio).
-  - **Binarios específicos** (`dist/qim_audio`, etc.).
+  - **Binarios específicos** (`dist/qim`, etc.).
 
 ---
 

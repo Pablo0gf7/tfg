@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGINDIR="$HOME/.msf4/plugins"
-BIN_DEFAULT="$ROOT/core/stego"   
+BIN_DEFAULT="$ROOT/dist/stego"   
 
 mkdir -p "$PLUGINDIR"
 

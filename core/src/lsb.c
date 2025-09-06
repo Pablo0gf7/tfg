@@ -4,7 +4,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../include/stb_image_write.h"
 
-#include "../headers/lsb2-random.h"
+#include "../headers/lsb.h"
 #include "../headers/utils.h"
 
 #include <stdio.h>
@@ -25,8 +25,9 @@ void embedMessage(const char *imagePath, const char *message, const char *output
     unsigned char *img_original = malloc(width * height * channels);
     memcpy(img_original, img, width * height * channels);
 
+    // --- Cifrado y empaquetado (igual que antes) ---
     size_t messageLen = strlen(message);
-    size_t cipherLen = messageLen + crypto_secretbox_MACBYTES;
+    size_t cipherLen  = messageLen + crypto_secretbox_MACBYTES;
 
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
     randombytes_buf(nonce, sizeof nonce);
@@ -37,57 +38,77 @@ void embedMessage(const char *imagePath, const char *message, const char *output
     unsigned char *cipher = malloc(cipherLen);
     crypto_secretbox_easy(cipher, (const unsigned char *)message, messageLen, nonce, key_bin);
 
-    uint32_t msg_len_le = (uint32_t)messageLen;
+    uint32_t msg_len_le    = (uint32_t)messageLen;
     uint32_t cipher_len_le = (uint32_t)cipherLen;
 
     size_t totalLen = 3 + crypto_secretbox_NONCEBYTES + 4 + 4 + cipherLen + 3;
-    unsigned char *finalData = malloc(totalLen);
+    unsigned char *finalData = calloc(totalLen, 1);
     unsigned char *ptr = finalData;
 
-    memcpy(ptr, "###", 3); ptr += 3;
-    memcpy(ptr, nonce, crypto_secretbox_NONCEBYTES); ptr += crypto_secretbox_NONCEBYTES;
-    memcpy(ptr, &msg_len_le, 4); ptr += 4;
-    memcpy(ptr, &cipher_len_le, 4); ptr += 4;
-    memcpy(ptr, cipher, cipherLen); ptr += cipherLen;
+    memcpy(ptr, "###", 3);                                   ptr += 3;
+    memcpy(ptr, nonce, crypto_secretbox_NONCEBYTES);          ptr += crypto_secretbox_NONCEBYTES;
+    memcpy(ptr, &msg_len_le, 4);                              ptr += 4;
+    memcpy(ptr, &cipher_len_le, 4);                           ptr += 4;
+    memcpy(ptr, cipher, cipherLen);                           ptr += cipherLen;
     memcpy(ptr, "###", 3);
 
-    size_t bitsNeeded = totalLen * 8;
-    size_t totalPositions = width * height * 3;
-    if (bitsNeeded > totalPositions) {
-        fprintf(stderr, "Message too large.\n");
+    // --- LSB2: capacidad en PARES de bits (2 bits por posición) ---
+    size_t bitsNeeded    = totalLen * 8;
+    size_t pairsNeeded   = (bitsNeeded + 1) / 2;              // ceil(bits/2)
+    size_t totalPositions = (size_t)width * height * 3;       // R,G,B
+
+    if (pairsNeeded > totalPositions) {
+        fprintf(stderr, "Message too large for LSB2 capacity.\n");
         free(cipher); free(finalData); stbi_image_free(img); free(img_original);
         return;
     }
 
+    // --- Permutación Fisher–Yates con semilla derivada ---
     size_t *positions = malloc(totalPositions * sizeof(size_t));
     for (size_t i = 0; i < totalPositions; i++) positions[i] = i;
 
     unsigned char seed_hash[crypto_generichash_BYTES];
     crypto_generichash(seed_hash, sizeof seed_hash, (const unsigned char *)key, strlen(key), NULL, 0);
-    srand(*(uint32_t *)seed_hash);
+    uint32_t seed = ((uint32_t)seed_hash[0])
+                  | ((uint32_t)seed_hash[1] << 8)
+                  | ((uint32_t)seed_hash[2] << 16)
+                  | ((uint32_t)seed_hash[3] << 24);
+    srand(seed);
 
     for (size_t i = totalPositions - 1; i > 0; i--) {
         size_t j = rand() % (i + 1);
         size_t tmp = positions[i]; positions[i] = positions[j]; positions[j] = tmp;
     }
 
-    for (size_t bitIndex = 0; bitIndex < bitsNeeded; bitIndex++) {
-        size_t bytePos = bitIndex / 8;
-        int bit = 7 - (bitIndex % 8);
-        unsigned char bitVal = (finalData[bytePos] >> bit) & 1;
-        size_t pos = positions[bitIndex];
+    // --- Escritura LSB2 (MSB-first por byte) ---
+    for (size_t pairIndex = 0; pairIndex < pairsNeeded; ++pairIndex) {
+        size_t bitIndex = pairIndex * 2; // primer bit del par dentro del stream
+
+        // b1 = bit MSB del par, b2 = siguiente bit (MSB->LSB)
+        size_t bytePos1 = bitIndex / 8;
+        int    bit1     = 7 - (bitIndex % 8);
+        unsigned char b1 = (finalData[bytePos1] >> bit1) & 1;
+
+        size_t bytePos2 = (bitIndex + 1) / 8;
+        int    bit2     = 7 - ((bitIndex + 1) % 8);
+        unsigned char b2 = (finalData[bytePos2] >> bit2) & 1;
+
+        unsigned char pair = (unsigned char)((b1 << 1) | b2);
+
+        size_t pos   = positions[pairIndex];
         size_t pixel = pos / 3;
         size_t color = pos % 3;
-        img[pixel * channels + color] = (img[pixel * channels + color] & ~1) | bitVal;
+
+        size_t idx = (size_t)pixel * channels + color;
+        img[idx] = (img[idx] & (unsigned char)~3) | pair; // ~3 = 11111100
     }
 
     stbi_write_png(build_path_static(outputPath), width, height, channels, img, width * channels);
 
-
     calculate_metrics_image(img_original, img, width, height, channels, "./out/image_metrics.txt");
 
-
-    free(cipher); free(finalData); free(positions); stbi_image_free(img); free(img_original);
+    free(cipher); free(finalData); free(positions);
+    stbi_image_free(img); free(img_original);
 }
 
 char *extractMessage(const char *imagePath, const char *key) {
@@ -97,29 +118,48 @@ char *extractMessage(const char *imagePath, const char *key) {
     unsigned char *img = stbi_load(imagePath, &width, &height, &channels, 0);
     if (!img || channels < 3) return NULL;
 
-    size_t totalPositions = width * height * 3;
+    size_t totalPositions = (size_t)width * height * 3;
     size_t *positions = malloc(totalPositions * sizeof(size_t));
     for (size_t i = 0; i < totalPositions; i++) positions[i] = i;
 
     unsigned char seed_hash[crypto_generichash_BYTES];
     crypto_generichash(seed_hash, sizeof seed_hash, (const unsigned char *)key, strlen(key), NULL, 0);
-    srand(*(uint32_t *)seed_hash);
+    uint32_t seed = ((uint32_t)seed_hash[0])
+                  | ((uint32_t)seed_hash[1] << 8)
+                  | ((uint32_t)seed_hash[2] << 16)
+                  | ((uint32_t)seed_hash[3] << 24);
+    srand(seed);
 
     for (size_t i = totalPositions - 1; i > 0; i--) {
         size_t j = rand() % (i + 1);
         size_t tmp = positions[i]; positions[i] = positions[j]; positions[j] = tmp;
     }
 
-    size_t maxHeaderBits = (3 + crypto_secretbox_NONCEBYTES + 4 + 4) * 8;
-    unsigned char headerBuf[64] = {0};
+    // --- Primero extraemos SOLO la cabecera para conocer cipher_len ---
+    size_t headerLenBytes = 3 + crypto_secretbox_NONCEBYTES + 4 + 4; // "###" + nonce + msg_len + cipher_len
+    size_t headerBits     = headerLenBytes * 8;
+    size_t headerPairs    = (headerBits + 1) / 2;
 
-    for (size_t bitIndex = 0; bitIndex < maxHeaderBits; ++bitIndex) {
-        size_t bytePos = bitIndex / 8;
-        int bit = 7 - (bitIndex % 8);
-        size_t pos = positions[bitIndex];
+    unsigned char headerBuf[64] = {0}; // suficiente para la cabecera
+
+    for (size_t pairIndex = 0; pairIndex < headerPairs; ++pairIndex) {
+        size_t pos   = positions[pairIndex];
         size_t pixel = pos / 3;
         size_t color = pos % 3;
-        headerBuf[bytePos] |= ((img[pixel * channels + color] & 1) << bit);
+        size_t idx   = (size_t)pixel * channels + color;
+
+        unsigned char pair = img[idx] & 3;
+
+        // Escribimos los dos bits del par en el buffer (MSB-first), cuidando del final impar
+        for (int k = 0; k < 2; ++k) {
+            size_t bitIndex = pairIndex * 2 + (size_t)k;
+            if (bitIndex >= headerBits) break; // podría pasar si headerBits es impar (no lo es aquí, pero por robustez)
+
+            size_t bytePos = bitIndex / 8;
+            int bitInByte  = 7 - (bitIndex % 8);
+            unsigned char bitVal = (unsigned char)((pair >> (1 - k)) & 1);
+            headerBuf[bytePos] |= (unsigned char)(bitVal << bitInByte);
+        }
     }
 
     if (memcmp(headerBuf, "###", 3) != 0) {
@@ -136,30 +176,44 @@ char *extractMessage(const char *imagePath, const char *key) {
     memcpy(&msg_len, ptr, 4); ptr += 4;
     memcpy(&cipher_len, ptr, 4); ptr += 4;
 
-    size_t totalLen = 3 + crypto_secretbox_NONCEBYTES + 4 + 4 + cipher_len + 3;
-    size_t bitsToExtract = totalLen * 8;
-    unsigned char *data = calloc(totalLen, 1);
+    // --- Ahora extraemos TODO: cabecera + cipher + "###" final ---
+    size_t totalLenBytes = 3 + crypto_secretbox_NONCEBYTES + 4 + 4 + (size_t)cipher_len + 3;
+    size_t bitsToExtract = totalLenBytes * 8;
+    size_t totalPairs    = (bitsToExtract + 1) / 2;
 
-    for (size_t bitIndex = 0; bitIndex < bitsToExtract; ++bitIndex) {
-        size_t bytePos = bitIndex / 8;
-        int bit = 7 - (bitIndex % 8);
-        size_t pos = positions[bitIndex];
+    unsigned char *data = calloc(totalLenBytes, 1);
+
+    for (size_t pairIndex = 0; pairIndex < totalPairs; ++pairIndex) {
+        size_t pos   = positions[pairIndex];
         size_t pixel = pos / 3;
         size_t color = pos % 3;
-        data[bytePos] |= ((img[pixel * channels + color] & 1) << bit);
+        size_t idx   = (size_t)pixel * channels + color;
+
+        unsigned char pair = img[idx] & 3;
+
+        for (int k = 0; k < 2; ++k) {
+            size_t bitIndex = pairIndex * 2 + (size_t)k;
+            if (bitIndex >= bitsToExtract) break;
+
+            size_t bytePos = bitIndex / 8;
+            int bitInByte  = 7 - (bitIndex % 8);
+            unsigned char bitVal = (unsigned char)((pair >> (1 - k)) & 1);
+            data[bytePos] |= (unsigned char)(bitVal << bitInByte);
+        }
     }
 
-    if (memcmp(data + totalLen - 3, "###", 3) != 0) {
+    if (memcmp(data + totalLenBytes - 3, "###", 3) != 0) {
         fprintf(stderr, "No final marker found.\n");
         free(positions); stbi_image_free(img); free(data);
         return NULL;
     }
 
     unsigned char *cipher = data + 3 + crypto_secretbox_NONCEBYTES + 4 + 4;
+
     unsigned char key_bin[crypto_secretbox_KEYBYTES];
     crypto_generichash(key_bin, sizeof key_bin, (const unsigned char *)key, strlen(key), NULL, 0);
 
-    unsigned char *decrypted = malloc(msg_len + 1);
+    unsigned char *decrypted = malloc((size_t)msg_len + 1);
     if (crypto_secretbox_open_easy(decrypted, cipher, cipher_len, nonce, key_bin) != 0) {
         fprintf(stderr, "Decryption failed.\n");
         free(decrypted); free(data); free(positions); stbi_image_free(img);
@@ -171,8 +225,6 @@ char *extractMessage(const char *imagePath, const char *key) {
     free(data); free(positions); stbi_image_free(img);
     return (char *)decrypted;
 }
-
-
 
 
 

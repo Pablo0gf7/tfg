@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "../headers/lsb2-random.h"
+#include "../headers/lsb.h"
 
 const char *build_path_static( const char *filename) {
     static char path[512];  

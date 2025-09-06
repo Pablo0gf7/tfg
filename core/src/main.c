@@ -7,7 +7,7 @@
 
 #include "../headers/charReplacement.h"
 
-#include "../headers/lsb2-random.h"
+#include "../headers/lsb.h"
 
 #include "../headers/qim.h"
 

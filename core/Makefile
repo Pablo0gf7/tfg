@@ -1,5 +1,5 @@
 # Nombre del ejecutable
-TARGET = stego
+TARGET = ../dist/stego
 
 # Directorios
 SRC_DIR = src

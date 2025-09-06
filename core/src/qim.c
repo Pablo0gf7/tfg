@@ -1,10 +1,10 @@
-// qim_audio_secure.c - QIM para audio con cifrado AEAD (XChaCha20-Poly1305) y cabecera BE
+// qim_secure.c - QIM para audio con cifrado AEAD (XChaCha20-Poly1305) y cabecera BE
 // Compilación:
-//   gcc qim_audio_secure.c -o qim_audio -lsndfile -lfftw3 -lsodium -lm
+//   gcc qim_secure.c -o qim -lsndfile -lfftw3 -lsodium -lm
 //
 // Uso:
-//   ./qim_audio embed in.wav out.wav "mensaje a ocultar" "password"
-//   ./qim_audio extract estego.wav "password"
+//   ./qim embed in.wav out.wav "mensaje a ocultar" "password"
+//   ./qim extract estego.wav "password"
 //
 // Notas:
 // - Se cifra el mensaje y se empaqueta: [len_be(4)] + [salt(16) || nonce(24) || ciphertext(len+16)]

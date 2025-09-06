@@ -8,7 +8,7 @@ if [[ ! -f "$PLUGINDIR/stego.rb" ]]; then
 fi
 
 echo "[*] Abriendo msfconsole. Prueba dentro:"
-echo "    msf > load $PLUGINDIR/stego.rb"
+echo "    msf > load stego"
 echo "    msf > stego_debug on"
 echo "    msf > stego_bin"
 echo "    msf > stego --help   # (tu binario debería mostrar su ayuda)"
