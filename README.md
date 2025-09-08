@@ -1,35 +1,25 @@
 # stego-metasploit
 
-Plugin de Metasploit (`stego.rb`) para invocar **algoritmos esteganográficos en C** (imagen, audio, texto) desde `msfconsole`.  
-No se porta la lógica a Ruby: la capa Ruby **orquesta** un binario externo, preservando rendimiento y control.
+Proyecto para **ocultar y extraer mensajes** en **texto, imagen y audio** mediante algoritmos esteganográficos escritos en C, invocados desde **Metasploit** a través de un plugin sencillo (`stego.rb`).
 
-> **Estado**: estable para uso local/lab. Se aceptan PRs.
-
----
-
-## ✨ Características
-
-- `load stego.rb` en `msfconsole` y tendrás:
-  - `stego <args...>`: ejecuta el binario configurado con tus argumentos.
-  - `stego_set_bin /ruta/al/binario`
-  - `stego_bin`: muestra y verifica la ruta
-  - `stego_debug on|off|toggle`: trazas de depuración
-- Redacción automática de secretos al imprimir la línea ejecutada (flags `-k`, `-k`, `-m`).
-- Compatible con:
-  - **Binario monolítico** (`dist/steg`): modos `-t` (texto), `-i` (imagen), `-a` (audio).
-  - **Binarios específicos** (`dist/qim`, etc.).
+> Pensado para **uso académico/demostrativo** (laboratorio). No está orientado a fines maliciosos.
 
 ---
 
-## 📦 Instalación
+**Trabajo de Fin de Grado (TFG)**
+*Desarrollo de un plugin para Metasploit utilizando
+algoritmos esteganográficos (texto, imagen y audio) con cifrado e integración en Metasploit*
 
-### Requisitos
-- Metasploit Framework (msfconsole)
-- (Opcional) Toolchain C y librerías:
-  - `libsndfile`, `fftw3`, `libsodium`, `libm` (audio)
-  - `stb_image.h`, `stb_image_write.h` (imagen)
+---
 
-### 1) Clonar
-```bash
-git clone https://github.com/<tu-usuario>/stego-metasploit.git
-cd stego-metasploit
+## ¿Para qué sirve?
+
+* Probar y demostrar técnicas de esteganografía:
+
+  * Texto (capitalización de letras)
+  * Imagen (LSB2 con cifrado)
+  * Audio (QIM con AEAD)
+* Integrar estas técnicas en `msfconsole` sin reescribir la lógica en Ruby (el plugin orquesta binarios C externos).
+
+---
+
