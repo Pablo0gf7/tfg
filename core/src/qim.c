@@ -19,10 +19,39 @@
 #include <sndfile.h>
 #include <fftw3.h>
 #include <sodium.h>
+#include <sys/stat.h>   // mkdir("out", 0777)
+#include <sys/types.h>
+
+/**
+ * @file qim_secure.c
+ * @brief Esteganografía de audio mediante QIM en el dominio DCT con cifrado AEAD (XChaCha20-Poly1305).
+ *
+ * @details
+ *  Flujo de inserción (embed):
+ *   1) Derivar clave (KDF: crypto_pwhash) usando SALT aleatorio.
+ *   2) Cifrar mensaje (AEAD XChaCha20-Poly1305) con NONCE aleatorio.
+ *   3) Formar payload: [len_BE (4 bytes)] + salt(16) + nonce(24) + ciphertext(len+ABYTES).
+ *   4) Convertir payload a bits (MSB→LSB por byte) y ocultarlos con QIM en coeficientes DCT i=1..N-1
+ *      de cada bloque y cada canal, por orden natural.
+ *
+ *  Extracción (extract):
+ *   1) Leer todos los bits QIM en el mismo orden.
+ *   2) Reconstruir los 4 bytes BE -> enc_len y luego enc_len bytes de blob cifrado.
+ *   3) Derivar clave con el SALT extraído y descifrar con NONCE.
+ *
+ *  Convenciones:
+ *   - Audio float en [-1,1] (libsndfile). Post-IDCT se normaliza por 1/(2N) y se clamp a [-1,1].
+ *   - Capacidad (bits) ≈ canales * Σ_bloques (frames_bloque-1). El coeficiente DC (i=0) no se usa.
+ *   - Cabecera de longitud en big-endian para portabilidad (red/BE order).
+ *
+ *  Seguridad:
+ *   - KDF: crypto_pwhash_INTERACTIVE. Para mayor dureza, considerar *_MODERATE o *_SENSITIVE.
+ *   - AEAD: XChaCha20-Poly1305 (nonce 24 bytes) con autenticación. Si falla, se aborta.
+ */
 
 // ====== Parámetros ======
 #define BLOCK_SIZE 1024 // tamaño de bloque DCT
-#define DELTA 0.15      // paso de cuantización QIM
+#define DELTA 0.15      // paso de cuantización QIM (trade-off imperceptibilidad/robustez)
 
 // libsodium
 #define SALT_LEN crypto_pwhash_SALTBYTES                       // 16
@@ -45,6 +74,7 @@ static sf_count_t compute_modified_frames(sf_count_t total_frames, int channels,
 
 void calculate_metrics_audio(const char *orig_file, const char *stego_file, const char *output_path);
 
+// API pública esperada por el CLI
 void embed_message(const char *infile, const char *outfile, const char *message, const char *password);
 void extract_message(const char *infile, const char *password);
 
@@ -73,6 +103,7 @@ static uint32_t be_to_u32(const unsigned char in[4])
 // --------- QIM básico ---------
 static double qim_embed(double coef, int bit, double delta)
 {
+    // Cuantizamos el coeficiente y forzamos la paridad del índice de cuantización
     double q = round(coef / delta);
     if (((int)q & 1) != bit)
     {
@@ -84,7 +115,7 @@ static double qim_embed(double coef, int bit, double delta)
 static int qim_extract(double coef, double delta)
 {
     int q = (int)round(coef / delta);
-    return q & 1;
+    return q & 1; // bit escondido en la paridad
 }
 
 // --------- Cálculo de capacidad ---------
@@ -158,6 +189,7 @@ void embed_message(const char *infile, const char *outfile, const char *message,
     randombytes_buf(salt, SALT_LEN);
     randombytes_buf(nonce, NONCE_LEN);
 
+    // Derivación de clave desde password (parámetros INTERACTIVE por defecto)
     if (crypto_pwhash(key, KEY_LEN,
                       password, strlen(password), salt,
                       crypto_pwhash_OPSLIMIT_INTERACTIVE,
@@ -236,7 +268,7 @@ void embed_message(const char *infile, const char *outfile, const char *message,
     }
     free(payload);
 
-    // Buffers de trabajo
+    // Buffers de trabajo (framebuf: intercalado por canal)
     size_t ch = (size_t)sfinfo.channels;
     float *framebuf = (float *)malloc(sizeof(float) * BLOCK_SIZE * ch);
     double *work = (double *)malloc(sizeof(double) * BLOCK_SIZE);
@@ -253,7 +285,7 @@ void embed_message(const char *infile, const char *outfile, const char *message,
         return;
     }
 
-    // Recorremos el audio por bloques de FRAMES; por cada canal aplicamos DCT y embebido
+    // Recorremos el audio por bloques; por canal aplicamos DCT y embebido
     sf_count_t frames;
     uint64_t bit_pos = 0;
     while ((frames = sf_readf_float(in, framebuf, BLOCK_SIZE)) > 0)
@@ -265,7 +297,6 @@ void embed_message(const char *infile, const char *outfile, const char *message,
             continue;
         }
 
-        // Procesar canal a canal
         for (size_t c = 0; c < ch; ++c)
         {
             // Copia canal c -> work[]
@@ -290,7 +321,7 @@ void embed_message(const char *infile, const char *outfile, const char *message,
             fftw_execute(ip);
             fftw_destroy_plan(ip);
 
-            // Normalizar (FFTW: DCT-II+III ~ 2N * identidad). Escalar y clamping a [-1,1].
+            // Normalizar (FFTW: DCT-II+III ≈ 2N * I). Escalar y clamp a [-1,1].
             double scale = 1.0 / (2.0 * (double)frames);
             for (sf_count_t i = 0; i < frames; ++i)
             {
@@ -311,6 +342,7 @@ void embed_message(const char *infile, const char *outfile, const char *message,
     else
     {
         printf("Mensaje ocultado correctamente en: %s\n", outfile);
+        // Métricas objetivas
         calculate_metrics_audio(infile, outfile, "./out/audio_metrics.txt");
     }
 
@@ -517,8 +549,7 @@ void extract_message(const char *infile, const char *password)
     // Asegura terminación si era texto
     if (plain_len == 0 || plain[plain_len - 1] != '\0')
     {
-        // Para imprimir seguro, añadimos '\0' (sin asumir que el mensaje original lo llevaba)
-        unsigned char *tmp = realloc(plain, (size_t)plain_len + 1);
+        unsigned char *tmp = (unsigned char *)realloc(plain, (size_t)plain_len + 1);
         if (tmp)
         {
             plain = tmp;
@@ -526,20 +557,23 @@ void extract_message(const char *infile, const char *password)
         }
         else
         {
+            // peor caso: pisa el último byte, sólo para impresión segura
             plain[plain_len - 1] = '\0';
-        } // peor caso
+        }
     }
 
+    // Guardar en ./out (binario tal cual). En *nix, mkdir con 0777; en Windows usar _mkdir.
     mkdir("out", 0777);
-
-const char *out_path = "./out/audio_extract.bin";
-if (escribirArchivoBin(out_path, plain, (size_t)plain_len) == 0) {
-    printf("Mensaje descifrado guardado en: %s (%llu bytes)\n",
-           out_path, (unsigned long long)plain_len);
-} else {
-    fprintf(stderr, "No se pudo guardar el mensaje en %s\n", out_path);
-}
-
+    const char *out_path = "./out/audio_extract.bin";
+    if (escribirArchivoBin(out_path, plain, (size_t)plain_len) == 0)
+    {
+        printf("Mensaje descifrado guardado en: %s (%llu bytes)\n",
+               out_path, (unsigned long long)plain_len);
+    }
+    else
+    {
+        fprintf(stderr, "No se pudo guardar el mensaje en %s\n", out_path);
+    }
 
     free(plain);
     free(enc);
@@ -901,30 +935,6 @@ void calculate_metrics_audio(const char *orig_file, const char *stego_file, cons
         fprintf(f, "TOTAL:    (sin frames modificados)\n\n");
     }
 
-    // Sección: NO MODIFICADOS
-    fprintf(f, "==== FRAMES NO MODIFICADOS ====\n");
-    double sum_err_unm_tot = 0.0, sum_sig_unm_tot = 0.0;
-    for (int c = 0; c < channels; ++c)
-    {
-        double mse = (unmodified_frames > 0) ? (sum_err2_unm[c] / (double)unmodified_frames) : 0.0;
-        double ps = psnr_c(mse, peak); // normalmente infinito si mse≈0
-        double sr = snr_c(sum_sig2_unm[c], sum_err2_unm[c]);
-        fprintf(f, "Canal %d:  MSE=%.10g   PSNR=%.2f dB   SNR=%.2f dB   (frames=%lld)\n",
-                c, mse, ps, sr, (long long)unmodified_frames);
-        sum_err_unm_tot += sum_err2_unm[c];
-        sum_sig_unm_tot += sum_sig2_unm[c];
-    }
-    if (unmodified_frames > 0)
-    {
-        double mse_unm_aggr = sum_err_unm_tot / (double)(unmodified_frames * channels);
-        double psnr_unm_aggr = psnr_c(mse_unm_aggr, peak);
-        double snr_unm_aggr = snr_c(sum_sig_unm_tot, sum_err_unm_tot);
-        fprintf(f, "TOTAL:    MSE=%.10g   PSNR=%.2f dB   SNR=%.2f dB\n", mse_unm_aggr, psnr_unm_aggr, snr_unm_aggr);
-    }
-    else
-    {
-        fprintf(f, "TOTAL:    (sin frames no modificados)\n");
-    }
 
     fclose(f);
 

@@ -14,7 +14,7 @@ No se porta la lógica a Ruby: la capa Ruby **orquesta** un binario externo, pre
   - `stego_set_bin /ruta/al/binario`
   - `stego_bin`: muestra y verifica la ruta
   - `stego_debug on|off|toggle`: trazas de depuración
-- Redacción automática de secretos al imprimir la línea ejecutada (flags `-p`, `-k`, `-m`).
+- Redacción automática de secretos al imprimir la línea ejecutada (flags `-k`, `-k`, `-m`).
 - Compatible con:
   - **Binario monolítico** (`dist/steg`): modos `-t` (texto), `-i` (imagen), `-a` (audio).
   - **Binarios específicos** (`dist/qim`, etc.).

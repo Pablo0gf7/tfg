@@ -75,8 +75,8 @@ module Msf
     end
 
     # Construye un string bonito para mostrar el comando que se va a ejecutar
-    # y redacta posibles secretos tras flags como -p/-k/-m
-    def display_command(bin, args, redact_flags = ['-p','-k','-m'])
+    # y redacta posibles secretos tras flags como -k/-k/-m
+    def display_command(bin, args, redact_flags = ['-k','-k','-m'])
       pieces = [bin] + args.dup
       printable = pieces.dup
       printable.each_with_index do |val, idx|
