@@ -44,6 +44,7 @@ void cerrarArchivo(FILE *archivo);
 char *convertirMinusculas(const char *cadena);
 
 int escribirBuffer(FILE *archivo, const void *datos, size_t longitud);
+
 int escribirArchivoBin(const char *ruta, const void *datos, size_t longitud);
 
 #endif

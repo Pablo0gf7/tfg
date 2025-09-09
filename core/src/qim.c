@@ -21,6 +21,7 @@
 #include <sodium.h>
 #include <sys/stat.h>   // mkdir("out", 0777)
 #include <sys/types.h>
+#include "../headers/utils.h"
 
 /**
  * @file qim_secure.c
@@ -68,7 +69,6 @@ static double qim_embed(double coef, int bit, double delta);
 static int qim_extract(double coef, double delta);
 static uint64_t compute_capacity_bits(sf_count_t total_frames, int channels);
 
-static double mse_to_psnr(double mse, double peak);
 static int read_embedded_length(const char *stego_file, uint32_t *out_len, int block_size, double delta);
 static sf_count_t compute_modified_frames(sf_count_t total_frames, int channels, uint64_t total_bits, int block_size);
 
@@ -562,7 +562,7 @@ void extract_message(const char *infile, const char *password)
         }
     }
 
-    // Guardar en ./out (binario tal cual). En *nix, mkdir con 0777; en Windows usar _mkdir.
+    // Guardar en ./out (binario tal cual). 
     mkdir("out", 0777);
     const char *out_path = "./out/audio_extract.bin";
     if (escribirArchivoBin(out_path, plain, (size_t)plain_len) == 0)
@@ -585,12 +585,6 @@ void extract_message(const char *infile, const char *password)
 
 // ============ MÉTRICAS: MSE / PSNR / SNR ============
 
-static double mse_to_psnr(double mse, double peak)
-{
-    if (mse <= 0.0)
-        return INFINITY; // idéntico => PSNR infinita
-    return 10.0 * log10((peak * peak) / mse);
-}
 
 // Extrae SOLO la longitud (los 4 bytes de cabecera) del estego, reutilizando QIM.
 // Devuelve 1 si OK y deja msg_len en out; 0 si error.

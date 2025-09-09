@@ -141,7 +141,10 @@ char *read_text_file(const char *filename) {
         printf("Memory allocation failed\n");
         return NULL;
     }
-    fread(buffer, 1, len, f);  
+    size_t read = fread(buffer, 1, len, f);
+    if (read != len) {
+        fprintf(stderr, "ERROR: no se pudieron leer %zu bytes del archivo\n", len);
+    }
     buffer[len] = '\0';       
     fclose(f);
     return buffer;

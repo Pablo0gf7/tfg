@@ -288,7 +288,7 @@ static const char *chan_name(int c, int channels) {
         static const char *names[3] = {"R","G","B"};
         return names[c];
     }
-    static char buf[10];
+    static char buf[12];
     snprintf(buf, sizeof buf, "C%d", c);
     return buf;
 }

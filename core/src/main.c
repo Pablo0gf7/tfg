@@ -37,18 +37,6 @@ static const char *progname = "steganografia"; // actualizado en main() con argv
 
 // --------------------------- Utilidades CLI internas ---------------------------
 
-static char *read_line(char *dst, size_t n, const char *prompt) {
-    if (prompt) fputs(prompt, stdout);
-    if (!fgets(dst, n, stdin)) return NULL;
-    dst[strcspn(dst, "\n")] = 0;
-    return dst;
-}
-
-static void flush_stdin(void) {
-    int ch;
-    while ((ch = getchar()) != '\n' && ch != EOF) {}
-}
-
 static void print_global_usage(void) {
     fprintf(stdout,
     "Uso:\n"
@@ -75,7 +63,7 @@ static void print_global_usage(void) {
     "  %s audio embed  -i ./resources/audio/space-piano.wav -o ./out/space_piano_out.wav -k clave123 -m Algoritmo123\n"
     "  %s audio embed  -i ./resources/audio/space-piano.wav -o ./out/space_piano_out.wav -k clave123 -f ./resources/messages/mensajeEjemploMemoria.txt\n"
     "  %s audio extract -i ./out/space_piano_out.wav -k clave123\n",
-    progname, progname, progname, progname, progname, progname, progname, progname);
+    progname, progname, progname, progname, progname, progname, progname, progname,progname);
 }
 
 /**

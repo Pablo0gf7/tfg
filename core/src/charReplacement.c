@@ -26,7 +26,7 @@ static const char base16_letras[16] = "EAOSRNIDLCTUMPHY";
 static inline char nibble_a_letra(unsigned v)
 {
     if (v < 16u) return base16_letras[v];
-    fprintf(stderr, "ERROR: nibble fuera de rango (%%u) en nibble_a_letra()\n", v);
+    fprintf(stderr, "ERROR: nibble fuera de rango (%u) en nibble_a_letra()\n", v);
     return '\0';
 }
 
